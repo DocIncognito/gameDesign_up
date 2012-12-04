@@ -1,6 +1,5 @@
 '''
 Mission Critical:
-	-Get screens functioning
 	-Create game over scenario
 Mission Less-Critical:
 	-Main menu
@@ -8,10 +7,6 @@ Mission Less-Critical:
 	-Scoring system
 	-Remove awkward transitions and teleports
 	-Power-ups
-Questions:
-	-Showing intro screens: use booleans for game states, separate Master Render Loop accordingly
-	-How do I solve the issue of conflicting alpha types?
-	-Why is deleting bullets on collision causing a crash?
 '''
 
 #---------------------------------------- Imports ----------------------------------------#
@@ -31,9 +26,8 @@ enemyVel = initialEnemyVel											# Ensures that enemyVel has a value to begi
 alphaMod = 0.5														# Increment by which the background cycles its alpha values
 lowerAlpha = 30														# Lower bound of the background alpha cycle
 higherAlpha = 60													# Upper bound of the background alpha cycle
-initialSpawnChance = 20												# Initial chance of an enemy appearing each second (out of 100)
+initialSpawnChance = 5												# Initial chance of an enemy appearing each second (out of 100)
 lColors = ["red", "orange", "yellow", "green", "teal", "blue"]		# A list of colors used for determining what color bullet to fire
-gameState = "intro"
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Classes ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #~~~~~~~~~~~~~~~~~~~~ Screen ~~~~~~~~~~~~~~~~~~~~#
@@ -69,14 +63,14 @@ class Screen(object):
 		self.surf.set_alpha(self.alpha)
 	
 	#~~~ Fade In ~~~#
-	def fadeIn(self, jump):
+	def fadeIn(self, end, jump):
 		'''Increase the alpha of the screen until max.'''
-		if self.surf.get_alpha() < 255:
+		if self.surf.get_alpha() < end:
 			self.alpha += jump
 			self.surf.set_alpha(self.alpha)
 			
 	#~~~ Fade Out ~~~#
-	def fadeOut(self, jump):
+	def fadeOut(self, end, jump):
 		'''Decrease the alpha of the screen until min.'''
 		if self.surf.get_alpha() > 0:
 			self.alpha -= jump
@@ -238,40 +232,67 @@ class Intro(object):
 		self.screen = pygame.display.set_mode((resX, resY), pygame.FULLSCREEN)
 		self.clock = pygame.time.Clock()
 		self.startTime = time.time()
+		self.timeAtStarting = -1
+		
+		# Initialize gameState, which determines whether to show intros, game, etc.
+		print "-------------------------------------------------------------------------------"
+		print "Initializing gameState as 'intro'."
+		self.gameState = "intro"
 		
 		# Prepare objects related to the intro screens
 		self.helix = Screen("screen_helix")
 		self.helix.surf.set_alpha(0)
-		
+		self.up = Screen("screen_up")
+		self.up.surf.set_alpha(0)
+		self.bg = Screen("screen_background")
+		self.bg.surf.set_alpha(0)
+
 	#/// Intro Process Events ///#
 	def intro_processEvents(self):
 		'''Only allows users to quit at this time.'''
+		
+		self.elapsedTime = time.time() - self.startTime
+		
 		for event in pygame.event.get():
 			if event.type == pygame.KEYDOWN:
 				if event.key == pygame.K_ESCAPE:
 					sys.exit()
 				if event.key == pygame.K_SPACE:
-					print "Break"
-					gameState = "game"
+					print "Changing gameState to 'starting'."
+					self.gameState = "starting"
+					self.timeAtStarting = time.time()
 					
 	#/// Intro Update  ///#
 	def intro_update(self):
 		'''Used to fade screens in and out.'''
-		self.helix.fadeIn(5)
+
+		jump = 5
+		
+		if self.elapsedTime <= 2:
+			self.helix.fadeIn(255, jump)
+		elif self.elapsedTime > 2 and self.elapsedTime <= 4: 
+			self.helix.fadeOut(0, jump)
+		elif self.elapsedTime > 4 and self.elapsedTime <= 6:
+			self.up.fadeIn(255, jump)
+			self.bg.fadeIn(10, 0.5)		
+		elif self.gameState == "starting":
+			self.up.fadeOut(0, jump)
 		
 	#/// Intro Draw ///#
 	def intro_draw(self):
 		'''Blank the screen and draw objects.'''
 		self.screen.fill((0, 0, 0))
 		self.helix.draw(self.screen)
+		self.up.draw(self.screen)
+		self.bg.draw(self.screen)
 		
 	#/// Intro Exit ///#
 	def intro_exit(self):
-		elapsedTime = self.startTime - time.time()
-		if elapsedTime > 100:
-			print "Break"
-			gameState = "game"
-		
+		timeSinceStarting = time.time() - self.timeAtStarting
+		if timeSinceStarting > 2 and self.timeAtStarting != -1:
+			print "Changing gameState to 'game'."
+			self.gameState = "game"
+					
 #//////////////////// Game ////////////////////#
 class Game(object):
 	#/// Init ///#
@@ -303,7 +324,7 @@ class Game(object):
 					self.player.moving[1] = True
 				# Switch which side of the screen the player is on
 				if event.key == pygame.K_LSHIFT:
-					self.player.swap(self.screen.get_rect())
+					self.player.swap(i.screen.get_rect())
 				# Spawn an enemy
 				if event.key == pygame.K_e:
 					self.enemies.append(Enemy())
@@ -319,76 +340,54 @@ class Game(object):
 	#/// Update ///#
 	def update(self):
 		'''Run the update functions of all objects: update movement and transparency, check for collisions.'''
-		self.bg.cycle(self.screen.get_rect())					# Cycle background alpha
+		self.bg.cycle(i.screen.get_rect())					# Cycle background alpha
 		
-		self.player.update(self.screen.get_rect())				# Move player
+		self.player.update(i.screen.get_rect())				# Move player
 		
 		for item in self.bullets:
-			item.update(self.screen.get_rect())					# Move bullet
+			item.update(i.screen.get_rect())					# Move bullet
 			if item.rect.right < 0 or item.rect.left > resX:	# If bullet is offscreen...
 				self.bullets.remove(item)						# Delete the bullet
 		
-		elapsedTime = time.time() - self.startTime
-		spawnChance = initialSpawnChance + elapsedTime / 500
-		#enemyVel = initialEnemyVel + elapsedTime / 100
+		elapsedTime = time.time() - i.startTime
+		spawnChance = initialSpawnChance + elapsedTime / 3
+		enemyVel = initialEnemyVel + elapsedTime / 1
 		num = random.randint(0, 100)
 		if num < spawnChance:
 			self.enemies.append(Enemy())
 		
 		for item in self.enemies:
-			item.update(self.screen.get_rect())					# Move enemy
+			item.update(i.screen.get_rect())					# Move enemy
 			
-		collideLists(self.bullets, self.enemies)				# Check if any bullet is colliding with any enemy
+		# Check if any bullet is colliding with any enemy
+		collideLists(self.bullets, self.enemies)
 		
 	#/// Draw ///#
 	def draw(self):
 		'''Blank the screen and draw all objects.'''
-		self.screen.fill((0, 0, 0))								# Fill the screen with blackness
-		self.bg.draw(self.screen)								# Draw the background
-		self.player.draw(self.screen)							# Draw the player
+		i.screen.fill((0, 0, 0))								# Fill the screen with blackness
+		self.bg.draw(i.screen)									# Draw the background
+		self.player.draw(i.screen)								# Draw the player
 		for item in self.bullets:								# Loop through all bullets
-			item.draw(self.screen)
+			item.draw(i.screen)
 		for item in self.enemies:								# Loop through all enemies
-			item.draw(self.screen)
+			item.draw(i.screen)
 		
 #'''''''''''''''''''''''''''''' Master Render Loop '''''''''''''''''''''''''#
-print "-------------------------------------------------------------------------------"
-
 i = Intro()
 g = Game()
 
 while True:
 	i.clock.tick(30)				# Set the clock speed
-
-	if gameState == "intro":
+	
+	if i.gameState == "intro" or i.gameState == "starting":
 		i.intro_processEvents()
 		i.intro_update()
 		i.intro_draw()
 		i.intro_exit()
-	else:
-		g.processEvents()			# Check for user input
-		g.update()					# Update movement, opacity, collisions
+	elif i.gameState == "game":
+		g.processEvents()
+		g.update()
 		g.draw()	
 		
 	pygame.display.flip()			# Flip the display
-
-
-'''
-i = Intro()
-
-while gameState == "intro":
-	i.clock.tick(30)				# Set the clock speed
-	i.intro_processEvents()
-	i.intro_update()
-	i.intro_draw()
-	#i.intro_exit()
-	pygame.display.flip()			# Flip the display
-
-g = Game()
-
-while gameState == "game":
-	g.processEvents()			# Check for user input
-	g.update()					# Update movement, opacity, collisions
-	g.draw()					# Draw objects
-	pygame.display.flip()		# Flip the display
-'''
