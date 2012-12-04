@@ -33,6 +33,7 @@ lowerAlpha = 30														# Lower bound of the background alpha cycle
 higherAlpha = 60													# Upper bound of the background alpha cycle
 initialSpawnChance = 20												# Initial chance of an enemy appearing each second (out of 100)
 lColors = ["red", "orange", "yellow", "green", "teal", "blue"]		# A list of colors used for determining what color bullet to fire
+gameState = "intro"
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Classes ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #~~~~~~~~~~~~~~~~~~~~ Screen ~~~~~~~~~~~~~~~~~~~~#
@@ -91,7 +92,7 @@ class Bullet(object):
 	def __init__(self, x0, y0, playerDirection):
 		'''Initialize the Bullet object, which is fired by the Player with the intention of destroying Enemies. Determines the color of bullets, and which direction they should be fired.'''
 		posMod = 40
-		
+
 		if playerDirection == "Left":
 			x0 += posMod
 			index = random.randint(3, 5)
@@ -226,16 +227,57 @@ def collideLists(list1, list2):
 				#list1.remove(i)
 				list2.remove(j)
 		
-#//////////////////////////////////////// Game ////////////////////////////////////////#
-class Game(object):
+#//////////////////////////////////////// Higher Level Classes ////////////////////////////////////////#
+#//////////////////// Intro ////////////////////#
+class Intro(object):
 	#/// Init ///#
 	def __init__(self):
-		'''Initialize the Game object, into which all other objects are placed. Prepare the screen, set the clock speed, and create instances of objects.'''
+		'''Initialize the Intro object, which is used to display static screens.'''
+		# Pygame initialization
 		pygame.init()
 		self.screen = pygame.display.set_mode((resX, resY), pygame.FULLSCREEN)
 		self.clock = pygame.time.Clock()
 		self.startTime = time.time()
-
+		
+		# Prepare objects related to the intro screens
+		self.helix = Screen("screen_helix")
+		self.helix.surf.set_alpha(0)
+		
+	#/// Intro Process Events ///#
+	def intro_processEvents(self):
+		'''Only allows users to quit at this time.'''
+		for event in pygame.event.get():
+			if event.type == pygame.KEYDOWN:
+				if event.key == pygame.K_ESCAPE:
+					sys.exit()
+				if event.key == pygame.K_SPACE:
+					print "Break"
+					gameState = "game"
+					
+	#/// Intro Update  ///#
+	def intro_update(self):
+		'''Used to fade screens in and out.'''
+		self.helix.fadeIn(5)
+		
+	#/// Intro Draw ///#
+	def intro_draw(self):
+		'''Blank the screen and draw objects.'''
+		self.screen.fill((0, 0, 0))
+		self.helix.draw(self.screen)
+		
+	#/// Intro Exit ///#
+	def intro_exit(self):
+		elapsedTime = self.startTime - time.time()
+		if elapsedTime > 100:
+			print "Break"
+			gameState = "game"
+		
+#//////////////////// Game ////////////////////#
+class Game(object):
+	#/// Init ///#
+	def __init__(self):
+		'''Initialize the Game object, which is updated and drawn during the actual game, but not during intro screens and menus.'''
+		# Prepare objects related to the game
 		self.bg = Screen("screen_background")
 		self.bullets = []
 		self.player = Player()
@@ -310,12 +352,43 @@ class Game(object):
 			item.draw(self.screen)
 		
 #'''''''''''''''''''''''''''''' Master Render Loop '''''''''''''''''''''''''#
+print "-------------------------------------------------------------------------------"
+
+i = Intro()
 g = Game()
 
-print "-------------------------------------------------------------------------------"
 while True:
-	g.clock.tick(30)			# Set the clock speed
+	i.clock.tick(30)				# Set the clock speed
+
+	if gameState == "intro":
+		i.intro_processEvents()
+		i.intro_update()
+		i.intro_draw()
+		i.intro_exit()
+	else:
+		g.processEvents()			# Check for user input
+		g.update()					# Update movement, opacity, collisions
+		g.draw()	
+		
+	pygame.display.flip()			# Flip the display
+
+
+'''
+i = Intro()
+
+while gameState == "intro":
+	i.clock.tick(30)				# Set the clock speed
+	i.intro_processEvents()
+	i.intro_update()
+	i.intro_draw()
+	#i.intro_exit()
+	pygame.display.flip()			# Flip the display
+
+g = Game()
+
+while gameState == "game":
 	g.processEvents()			# Check for user input
 	g.update()					# Update movement, opacity, collisions
 	g.draw()					# Draw objects
 	pygame.display.flip()		# Flip the display
+'''
