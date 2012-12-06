@@ -1,12 +1,12 @@
 '''
 Mission Critical:
-	-Create game over scenario
+	-Remove ability to spawn enemies
 Mission Less-Critical:
 	-Main menu
+	-Comment all the things
 	-Music and sound effects
 	-Scoring system
 	-Remove awkward transitions and teleports
-	-Power-ups
 '''
 
 #---------------------------------------- Imports ----------------------------------------#
@@ -20,7 +20,7 @@ import time
 resX = 1440															# Horizontal resolution
 resY = 900															# Vertical resolution
 bulletVel = 60														# Bullet velocity
-playerVel = 30														# Player movement speed
+playerVel = 40														# Player movement speed
 initialEnemyVel = 10												# Initial enemy velocity
 enemyVel = initialEnemyVel											# Ensures that enemyVel has a value to begin with
 alphaMod = 0.5														# Increment by which the background cycles its alpha values
@@ -38,10 +38,9 @@ class Screen(object):
 		self.alpha = lowerAlpha
 		self.alphaMod = alphaMod
 
-		#file = file + "_%dx%d.png" %(resX, resY)
-		file = file + ".png"
+		self.file = file
 		
-		self.surf = pygame.image.load(file).convert()
+		self.surf = pygame.image.load(self.file).convert()
 		self.surf = pygame.transform.scale(self.surf, (resX, resY))
 		self.rect = self.surf.get_rect()
 		self.surf.set_alpha(self.alpha)
@@ -52,7 +51,7 @@ class Screen(object):
 		pass
 
 	#~~~ Cycle ~~~#
-	def cycle(self, screenRect):
+	def cycle(self):
 		'''Cycle the transparency of a screen between two constants (lowerAlpha and higherAlpha) by an increment of alphaMod'''
 		if self.alpha >= higherAlpha:
 			self.alphaMod = -alphaMod
@@ -179,12 +178,12 @@ class Enemy(object):
 		spawnVal = random.randint(0, 1)
 		
 		if spawnVal == 0:
-			spawnSide = "Left"
+			self.spawnSide = "Left"
 			x0 = -100
 			self.vel = enemyVel
 			num = random.randint(5, 8)
 		else:
-			spawnSide = "Right"
+			self.spawnSide = "Right"
 			x0 = resX + 100
 			self.vel = -enemyVel
 			num = random.randint(1, 4)
@@ -210,6 +209,55 @@ class Enemy(object):
 	def erase(self, screen, bg):
 		''''Erase the Enemy from the screen. Currently unused, since enemies are managed by a list.'''
 		screen.blit(bg, self.rect)
+#~~~~~~~~~~~~~~~~~~~~ Screen ~~~~~~~~~~~~~~~~~~~~#
+class Meter(object):
+	#~~~ Meter Init ~~~#
+	def __init__(self, file):
+		'''Initialize the Meter object, which displays the player's progress towards losing.'''
+		self.alpha = lowerAlpha
+		self.alphaMod = alphaMod
+
+		self.file = file
+		
+		self.surf = pygame.image.load(self.file).convert()
+		self.rect = self.surf.get_rect()
+		self.rect.center = (resX / 2, resY * 1.5)
+		self.surf.set_alpha(120)
+	
+	#~~~ Update ~~~#
+	def update(self, screenRect):
+		'''Update the location of the meter.'''
+		self.rect.move_ip(0, -10)	
+		
+	#~~~ Cycle ~~~#
+	def cycle(self):
+		'''Cycle the transparency of a meter between two constants (lowerAlpha and higherAlpha) by an increment of alphaMod'''
+		if self.alpha >= 40:
+			self.alphaMod = -alphaMod
+		elif self.alpha <= 20:
+			self.alphaMod = alphaMod
+		
+		self.alpha += self.alphaMod
+		self.surf.set_alpha(self.alpha)
+	
+	#~~~ Fade In ~~~#
+	def fadeIn(self, end, jump):
+		'''Increase the alpha of the meter until max.'''
+		if self.surf.get_alpha() < end:
+			self.alpha += jump
+			self.surf.set_alpha(self.alpha)
+			
+	#~~~ Fade Out ~~~#
+	def fadeOut(self, end, jump):
+		'''Decrease the alpha of the meter until min.'''
+		if self.surf.get_alpha() > 0:
+			self.alpha -= jump
+			self.surf.set_alpha(self.alpha)
+			
+	#~~~ Draw ~~~#
+	def draw(self, screen):
+		'''Blit the Meter to the screen'''
+		screen.blit(self.surf, self.rect)
 		
 #---------------------------------------- Functions ----------------------------------------#
 #--- Collide Lists ---#
@@ -240,12 +288,14 @@ class Intro(object):
 		self.gameState = "intro"
 		
 		# Prepare objects related to the intro screens
-		self.helix = Screen("screen_helix")
+		self.bg = Screen("screen_background.png")
+		self.bg.surf.set_alpha(30)
+
+		self.helix = Screen("screen_helix.png")
 		self.helix.surf.set_alpha(0)
-		self.up = Screen("screen_up")
+
+		self.up = Screen("screen_up.png")
 		self.up.surf.set_alpha(0)
-		self.bg = Screen("screen_background")
-		self.bg.surf.set_alpha(0)
 
 	#/// Intro Process Events ///#
 	def intro_processEvents(self):
@@ -253,6 +303,7 @@ class Intro(object):
 		
 		self.elapsedTime = time.time() - self.startTime
 		
+		# Check keyboard input
 		for event in pygame.event.get():
 			if event.type == pygame.KEYDOWN:
 				if event.key == pygame.K_ESCAPE:
@@ -262,21 +313,22 @@ class Intro(object):
 					self.gameState = "starting"
 					self.timeAtStarting = time.time()
 					
+		# Check mouse clicks
+		if pygame.mouse.get_pressed()[0]:
+			print pygame.mouse.get_pos()
+					
 	#/// Intro Update  ///#
 	def intro_update(self):
 		'''Used to fade screens in and out.'''
-
-		jump = 5
 		
 		if self.elapsedTime <= 2:
-			self.helix.fadeIn(255, jump)
+			self.helix.fadeIn(255, 10)
 		elif self.elapsedTime > 2 and self.elapsedTime <= 4: 
-			self.helix.fadeOut(0, jump)
+			self.helix.fadeOut(0, 10)
 		elif self.elapsedTime > 4 and self.elapsedTime <= 6:
-			self.up.fadeIn(255, jump)
-			self.bg.fadeIn(10, 0.5)		
+			self.up.fadeIn(230, 5)	
 		elif self.gameState == "starting":
-			self.up.fadeOut(0, jump)
+			self.up.fadeOut(0, 10)
 		
 	#/// Intro Draw ///#
 	def intro_draw(self):
@@ -292,18 +344,25 @@ class Intro(object):
 		if timeSinceStarting > 2 and self.timeAtStarting != -1:
 			print "Changing gameState to 'game'."
 			self.gameState = "game"
+			self.gameStartTime = time.time()
+			pygame.mouse.set_visible(False)
 					
 #//////////////////// Game ////////////////////#
 class Game(object):
 	#/// Init ///#
 	def __init__(self):
 		'''Initialize the Game object, which is updated and drawn during the actual game, but not during intro screens and menus.'''
-		# Prepare objects related to the game
-		self.bg = Screen("screen_background")
+		# Prepare class objects
+		self.meter = Meter("meter.png")
 		self.bullets = []
 		self.player = Player()
 		self.enemies = []
+		self.gameOver = Screen("screen_gameOver.png")
+		self.gameOver.surf.set_alpha(0)
+		self.gameIsOver = False
 		
+		self.nEscaped = 0
+				
 	#/// Process Events ///#
 	def processEvents(self):
 		'''Search for keyboard input and respond accordingly.'''
@@ -315,7 +374,8 @@ class Game(object):
 					sys.exit()
 				# Create a bullet
 				if event.key == pygame.K_SPACE:
-					self.bullets.append(Bullet(self.player.rect.centerx, self.player.rect.centery, self.player.currentDirection))
+					if len(self.bullets) < 2:
+						self.bullets.append(Bullet(self.player.rect.centerx, self.player.rect.centery, self.player.currentDirection))
 				# Begin moving the player up
 				if event.key == pygame.K_UP:
 					self.player.moving[0] = True
@@ -340,40 +400,61 @@ class Game(object):
 	#/// Update ///#
 	def update(self):
 		'''Run the update functions of all objects: update movement and transparency, check for collisions.'''
-		self.bg.cycle(i.screen.get_rect())					# Cycle background alpha
+		elapsedTime = time.time() - i.gameStartTime
+		
+		if not gameIsOver:
+		
+		i.bg.cycle()										# Cycle background alpha
+		self.meter.cycle()
 		
 		self.player.update(i.screen.get_rect())				# Move player
 		
+		# Update Bullets
 		for item in self.bullets:
 			item.update(i.screen.get_rect())					# Move bullet
 			if item.rect.right < 0 or item.rect.left > resX:	# If bullet is offscreen...
 				self.bullets.remove(item)						# Delete the bullet
 		
-		elapsedTime = time.time() - i.startTime
-		spawnChance = initialSpawnChance + elapsedTime / 3
-		enemyVel = initialEnemyVel + elapsedTime / 1
+		# Update enemy difficulty
+		spawnChance = initialSpawnChance + elapsedTime / 5
+		enemyVel = initialEnemyVel + elapsedTime / 2
 		num = random.randint(0, 100)
 		if num < spawnChance:
 			self.enemies.append(Enemy())
 		
+		# Update enemy position and note if enemies have escaped
 		for item in self.enemies:
-			item.update(i.screen.get_rect())					# Move enemy
+			item.update(i.screen.get_rect())
+			if (item.rect.right < 0 and item.spawnSide == "Right") or item.rect.left > resX and item.spawnSide == "Left":
+				self.enemies.remove(item)								# Delete the enemy
+				
+				if self.nEscaped < 20:
+					self.nEscaped += 1
+								
+				print "%.2f: Enemy %d escaped." %(elapsedTime, self.nEscaped)
 			
 		# Check if any bullet is colliding with any enemy
 		collideLists(self.bullets, self.enemies)
+		
+		if self.meter.rect.top > resY - 45 * self.nEscaped:
+			self.meter.update(i.screen.get_rect())
+			if self.nEscaped >= 20:
+				gameIsOver = True
 		
 	#/// Draw ///#
 	def draw(self):
 		'''Blank the screen and draw all objects.'''
 		i.screen.fill((0, 0, 0))								# Fill the screen with blackness
-		self.bg.draw(i.screen)									# Draw the background
+		i.bg.draw(i.screen)									# Draw the background
 		self.player.draw(i.screen)								# Draw the player
 		for item in self.bullets:								# Loop through all bullets
 			item.draw(i.screen)
 		for item in self.enemies:								# Loop through all enemies
 			item.draw(i.screen)
-		
-#'''''''''''''''''''''''''''''' Master Render Loop '''''''''''''''''''''''''#
+		self.meter.draw(i.screen)
+		self.gameOver.draw(i.screen)
+
+#'''''''''''''''''''''''''''''''''''''''' Master Render Loop ''''''''''''''''''''''''''''''''''''''''#
 i = Intro()
 g = Game()
 
@@ -388,6 +469,6 @@ while True:
 	elif i.gameState == "game":
 		g.processEvents()
 		g.update()
-		g.draw()	
+		g.draw()
 		
 	pygame.display.flip()			# Flip the display
